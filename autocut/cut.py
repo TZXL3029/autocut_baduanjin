@@ -75,6 +75,15 @@ class Cutter:
     def __init__(self, args):
         self.args = args
 
+    # 辅助函数：清洗字幕内容，使其变成安全的文件名
+    def _safe_filename(self, text):
+        # 1. 移除换行和多余空格
+        text = text.replace("\n", " ").strip()
+        # 2. 过滤掉 Windows/Linux/Mac 系统的非法文件名字符
+        text = re.sub(r'[\\/*?:"<>|]', "_", text)
+        # 3. 截取前 5 个字符
+        return text[:5].strip()
+
     def run(self):
         fns = {"srt": None, "media": None, "md": None}
         for fn in self.args.inputs:
@@ -109,48 +118,60 @@ class Cutter:
         else:
             logging.info(f'Cut {fns["media"]} based on {fns["srt"]}')
 
-        # ---- 修改点 1：将媒体加载提前，以便获取 media.duration ----
+        # 将媒体加载提前，以便获取 media.duration
         if is_video_file:
             media = editor.VideoFileClip(fns["media"])
         else:
             media = editor.AudioFileClip(fns["media"])
 
+        # 整理带字幕文本的片段列表
         segments = []
-        # Avoid disordered subtitles
         subs.sort(key=lambda x: x.start)
         
-        # ---- 修改点 2：增加仅按 start 划分的分支逻辑 ----
+        # ------------------ 修改点：构建带字幕文本的 segments ------------------
         if getattr(self.args, "cut_by_start", False):
             logging.info("Using 'cut by start time' logic.")
             for i in range(len(subs)):
                 start_sec = subs[i].start.total_seconds()
+                end_sec = subs[i+1].start.total_seconds() if i < len(subs) - 1 else media.duration
+                text_clean = self._safe_filename(subs[i].content)
                 
-                # 如果不是最后一个字幕，结束时间就是下一个字幕的开始时间
-                if i < len(subs) - 1:
-                    end_sec = subs[i+1].start.total_seconds()
-                else:
-                    # 如果是最后一个字幕，结束时间就是媒体总时长
-                    end_sec = media.duration
-                
-                # 确保时间合法才加入
                 if start_sec < end_sec:
-                    segments.append({"start": start_sec, "end": end_sec})
+                    segments.append({
+                        "start": start_sec, 
+                        "end": end_sec,
+                        "text": text_clean,
+                        "orig_index": subs[i].index  # 保留字幕本来的序号
+                    })
         else:
-            # 默认的原版逻辑
+            # 默认合并逻辑，如果有合并，就拼接参与合并的字幕文本
+            # 为了简单起见，这里直接用每段合并区间内“第一条字幕”的文本和序号
+            temp_segments = []
             for x in subs:
-                if len(segments) == 0:
-                    segments.append(
-                        {"start": x.start.total_seconds(), "end": x.end.total_seconds()}
-                    )
+                start_sec = x.start.total_seconds()
+                end_sec = x.end.total_seconds()
+                text_clean = self._safe_filename(x.content)
+                
+                if len(temp_segments) == 0:
+                    temp_segments.append({
+                        "start": start_sec, 
+                        "end": end_sec, 
+                        "text": text_clean,
+                        "orig_index": x.index
+                    })
                 else:
-                    if x.start.total_seconds() - segments[-1]["end"] < 0.5:
-                        segments[-1]["end"] = x.end.total_seconds()
+                    if start_sec - temp_segments[-1]["end"] < 0.5:
+                        temp_segments[-1]["end"] = end_sec
                     else:
-                        segments.append(
-                            {"start": x.start.total_seconds(), "end": x.end.total_seconds()}
-                        )
+                        temp_segments.append({
+                            "start": start_sec, 
+                            "end": end_sec, 
+                            "text": text_clean,
+                            "orig_index": x.index
+                        })
+            segments = temp_segments
 
-        # ------------------ 安全地单独循环导出（保留之前的修改） ------------------
+        # ------------------ 修改点：输出文件名拼接 ------------------
         base_name, ext = os.path.splitext(os.path.basename(output_fn))
         total_segments = len(segments)
         
@@ -167,8 +188,9 @@ class Cutter:
         logging.info(f"Output directory: {os.path.abspath(out_dir)}")
 
         for idx, s in enumerate(segments):
-            # 拼接目标保存路径，例如: d:\your_path\test6_cut_1.mp4
-            part_filename = f"{base_name}_{idx + 1}{ext}"
+            # 新的命名规则：[原视频名]_字幕序号_[前5个字].mp4
+            # 示例: test6_cut_12_今天天气真.mp4
+            part_filename = f"{base_name}_{s['orig_index']}_{s['text']}{ext}"
             part_fn = os.path.join(out_dir, part_filename)
             
             # 重新实例化片段以避免句柄共享导致进程崩溃
