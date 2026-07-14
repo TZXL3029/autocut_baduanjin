@@ -109,59 +109,108 @@ class Cutter:
         else:
             logging.info(f'Cut {fns["media"]} based on {fns["srt"]}')
 
-        segments = []
-        # Avoid disordered subtitles
-        subs.sort(key=lambda x: x.start)
-        for x in subs:
-            if len(segments) == 0:
-                segments.append(
-                    {"start": x.start.total_seconds(), "end": x.end.total_seconds()}
-                )
-            else:
-                if x.start.total_seconds() - segments[-1]["end"] < 0.5:
-                    segments[-1]["end"] = x.end.total_seconds()
-                else:
-                    segments.append(
-                        {"start": x.start.total_seconds(), "end": x.end.total_seconds()}
-                    )
-
+        # ---- 修改点 1：将媒体加载提前，以便获取 media.duration ----
         if is_video_file:
             media = editor.VideoFileClip(fns["media"])
         else:
             media = editor.AudioFileClip(fns["media"])
 
-        # Add a fade between two clips. Not quite necessary. keep code here for reference
-        # fade = 0
-        # segments = _expand_segments(segments, fade, 0, video.duration)
-        # clips = [video.subclip(
-        #         s['start'], s['end']).crossfadein(fade) for s in segments]
-        # final_clip = editor.concatenate_videoclips(clips, padding = -fade)
-
-        clips = [media.subclip(s["start"], s["end"]) for s in segments]
-        if is_video_file:
-            final_clip: editor.VideoClip = editor.concatenate_videoclips(clips)
-            logging.info(
-                f"Reduced duration from {media.duration:.1f} to {final_clip.duration:.1f}"
-            )
-
-            aud = final_clip.audio.set_fps(44100)
-            final_clip = final_clip.without_audio().set_audio(aud)
-            final_clip = final_clip.fx(editor.afx.audio_normalize)
-
-            # an alternative to birate is use crf, e.g. ffmpeg_params=['-crf', '18']
-            final_clip.write_videofile(
-                output_fn, audio_codec="aac", bitrate=self.args.bitrate
-            )
+        segments = []
+        # Avoid disordered subtitles
+        subs.sort(key=lambda x: x.start)
+        
+        # ---- 修改点 2：增加仅按 start 划分的分支逻辑 ----
+        if getattr(self.args, "cut_by_start", False):
+            logging.info("Using 'cut by start time' logic.")
+            for i in range(len(subs)):
+                start_sec = subs[i].start.total_seconds()
+                
+                # 如果不是最后一个字幕，结束时间就是下一个字幕的开始时间
+                if i < len(subs) - 1:
+                    end_sec = subs[i+1].start.total_seconds()
+                else:
+                    # 如果是最后一个字幕，结束时间就是媒体总时长
+                    end_sec = media.duration
+                
+                # 确保时间合法才加入
+                if start_sec < end_sec:
+                    segments.append({"start": start_sec, "end": end_sec})
         else:
-            final_clip: editor.AudioClip = editor.concatenate_audioclips(clips)
-            logging.info(
-                f"Reduced duration from {media.duration:.1f} to {final_clip.duration:.1f}"
-            )
+            # 默认的原版逻辑
+            for x in subs:
+                if len(segments) == 0:
+                    segments.append(
+                        {"start": x.start.total_seconds(), "end": x.end.total_seconds()}
+                    )
+                else:
+                    if x.start.total_seconds() - segments[-1]["end"] < 0.5:
+                        segments[-1]["end"] = x.end.total_seconds()
+                    else:
+                        segments.append(
+                            {"start": x.start.total_seconds(), "end": x.end.total_seconds()}
+                        )
 
-            final_clip = final_clip.fx(editor.afx.audio_normalize)
-            final_clip.write_audiofile(
-                output_fn, codec="libmp3lame", fps=44100, bitrate=self.args.bitrate
-            )
+        # ------------------ 安全地单独循环导出（保留之前的修改） ------------------
+        base_name, ext = os.path.splitext(os.path.basename(output_fn))
+        total_segments = len(segments)
+        
+        # 确定输出文件夹
+        if getattr(self.args, "output_dir", None):
+            out_dir = self.args.output_dir
+            # 如果文件夹不存在则自动创建
+            os.makedirs(out_dir, exist_ok=True)
+        else:
+            # 默认保存在输入媒体文件的同目录下
+            out_dir = os.path.dirname(fns["media"]) or "."
 
+        logging.info(f"Total segments to cut: {total_segments}")
+        logging.info(f"Output directory: {os.path.abspath(out_dir)}")
+
+        for idx, s in enumerate(segments):
+            # 拼接目标保存路径，例如: d:\your_path\test6_cut_1.mp4
+            part_filename = f"{base_name}_{idx + 1}{ext}"
+            part_fn = os.path.join(out_dir, part_filename)
+            
+            # 重新实例化片段以避免句柄共享导致进程崩溃
+            if is_video_file:
+                temp_media = editor.VideoFileClip(fns["media"])
+            else:
+                temp_media = editor.AudioFileClip(fns["media"])
+                
+            clip = temp_media.subclip(s["start"], s["end"])
+            
+            logging.info(f"[{idx + 1}/{total_segments}] Saving to {part_fn} (Duration: {clip.duration:.1f}s)")
+
+            try:
+                if is_video_file:
+                    # 尝试进行原版的音频优化
+                    aud = clip.audio.set_fps(44100)
+                    clip = clip.without_audio().set_audio(aud)
+                    
+                    try:
+                        # 尝试归一化音量
+                        clip = clip.fx(editor.afx.audio_normalize)
+                    except Exception as e:
+                        logging.warning(f"[{idx + 1}/{total_segments}] 音频归一化失败，将使用原始音量导出。原因: {e}")
+                    
+                    # 导出视频片段
+                    clip.write_videofile(
+                        part_fn, audio_codec="aac", bitrate=self.args.bitrate
+                    )
+                else:
+                    try:
+                        clip = clip.fx(editor.afx.audio_normalize)
+                    except Exception as e:
+                        logging.warning(f"[{idx + 1}/{total_segments}] 音频归一化失败，将使用原始音量导出。原因: {e}")
+                        
+                    clip.write_audiofile(
+                        part_fn, codec="libmp3lame", fps=44100, bitrate=self.args.bitrate
+                    )
+            finally:
+                # 必须关闭当前的 clip 和临时打开的 media 句柄，彻底释放进程
+                clip.close()
+                temp_media.close()
+
+        # ------------------------------------------------------------------
         media.close()
-        logging.info(f"Saved media to {output_fn}")
+        logging.info(f"All segments saved successfully inside: {os.path.abspath(out_dir)}")

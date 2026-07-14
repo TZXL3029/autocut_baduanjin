@@ -161,6 +161,21 @@ def main():
         choices=["cpu", "cuda"],
         help="Force to CPU or GPU for transcribing. In default automatically use GPU if available.",
     )
+    # ------------------ 新增参数：指定输出文件夹 ------------------
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory to save the cut segments. If not provided, saves in the same directory as the input video.",
+    )
+    # ------------------ 新增参数：仅按照开始时间切割 ------------------
+    parser.add_argument(
+        "--cut-by-start",
+        help="Cut video continuously from one subtitle's start time to the next",
+        action=argparse.BooleanOptionalAction,
+    )
+    # -----------------------------------------------------------
 
     args = parser.parse_args()
 
