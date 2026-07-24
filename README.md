@@ -107,43 +107,6 @@ brew install ffmpeg
 scoop install ffmpeg
 ```
 
-## Docker 安装
-
-首先将项目克隆到本地。
-
-```bash
-git clone https://github.com/mli/autocut.git
-```
-
-### 安装 CPU 版本
-
-进入项目根目录，然后构建 docker 映像。
-
-```bash
-docker build -t autocut .
-```
-
-运行下面的命令创建 docker 容器，就可以直接使用了。
-
-```bash
-docker run -it --rm -v E:\autocut:/autocut/video autocut /bin/bash
-```
-
-其中 `-v` 是将主机存放视频的文件夹 `E:\autocut` 映射到虚拟机的 `/autocut/video` 目录。`E:\autocut` 是主机存放视频的目录，需修改为自己主机存放视频的目录。
-
-### 安装 GPU 版本
-
-使用 GPU 加速需要主机有 Nvidia 的显卡并安装好相应驱动。然后在项目根目录，执行下面的命令构建 docker 映像。
-
-```bash
-docker build -f ./Dockerfile.cuda -t autocut-gpu .
-```
-
-使用 GPU 加速时，运行 docker 容器需添加参数 `--gpus all`。
-
-```bash
-docker run --gpus all -it --rm -v E:\autocut:/autocut/video autocut-gpu
-```
 
 ## 更多使用选项
 
@@ -151,6 +114,18 @@ docker run --gpus all -it --rm -v E:\autocut:/autocut/video autocut-gpu
 
 ```bash
 autocut -t 22-52-00.mp4
+```
+
+也可以传入文件夹，批量转写该目录当前层的所有视频和音频文件（不递归子目录），输出到各媒体文件所在目录：
+
+```bash
+autocut -t ./videos
+```
+
+也可以用 `-o` 指定 `.srt` 和 `.md` 的输出目录：
+
+```bash
+autocut -t 22-52-00.mp4 -o ./output
 ```
 
 1. 如果对转录质量不满意，可以使用更大的模型，例如
@@ -170,13 +145,93 @@ autocut -c 22-52-00.mp4 22-52-00.srt 22-52-00.md
 
 1. 默认视频比特率是 `--bitrate 10m`，你可以根据需要调大调小。
 2. 如果不习惯 Markdown 格式文件，你也可以直接在 `srt` 文件里删除不要的句子，在剪切时不传入 `md` 文件名即可。就是 `autocut -c 22-52-00.mp4 22-52-00.srt`
-3. 如果仅有 `srt` 文件，编辑不方便可以使用如下命令生成 `md` 文件，然后编辑 `md` 文件即可，但此时会完全对照 `srt` 生成，不会出现 `no speech` 等提示文本。
+3. 如果字幕文件和视频同名，或者是常见的人声字幕命名（例如 `test3_vocals_cleaned.srt`、`test3_vocals.srt`），可以只传视频文件，AutoCut 会在视频所在目录和当前目录中自动匹配字幕文件：
+
+   ```bash
+   autocut -c vocal_extractor/videos/test3.mp4 -o test/test3_name --cut-by-start --force
+   ```
+
+   也可以传入视频目录，批量切割该目录当前层的所有视频和音频文件（不递归子目录）。指定 `-o` 时，每个视频会输出到独立子目录，例如 `test/test3_name`：
+
+   ```bash
+   autocut -c vocal_extractor/videos -o test --cut-by-start --force
+   ```
+
+4. 如果仅有 `srt` 文件，编辑不方便可以使用如下命令生成 `md` 文件，然后编辑 `md` 文件即可，但此时会完全对照 `srt` 生成，不会出现 `no speech` 等提示文本。
 
    ```bash
    autocut -m test.srt test.mp4
    autocut -m test.mp4 test.srt # 支持视频和字幕乱序传入
    autocut -m test.srt # 也可以只传入字幕文件
    ```
+
+### 八段锦片段打标
+
+如果已经使用 `[原视频名]_字幕序号_[前5个字].mp4` 命名规则切好了八段锦视频片段，可以先生成一个可人工复核的 CSV，再按标签复制到分类文件夹：
+
+```bash
+python -m autocut.baduanjin_label ./test/test6_name
+```
+
+如果是在源码目录中临时使用，且当前 Python 环境还没有安装完整的 AutoCut 视频依赖，也可以直接运行脚本文件：
+
+```bash
+python autocut/baduanjin_label.py ./test/test6_name
+```
+
+默认输出：
+
+```text
+./test/test6_name_labels.csv
+./test/test6_name_labeled/
+```
+
+CSV 字段包含 `filename`、`source_video`、`segment_index`、`text_hint`、`big_label`、`action_label`、`confidence`、`review` 和 `notes`。工具会结合文件名文字线索和片段顺序做弱自动标注，不能确定的片段会标记 `review=yes`，便于后续人工修正。
+
+打标规则使用五层逻辑：标准强锚点、核心中等锚点、常见错词、动作过程弱线索和通用呼吸词黑名单。强/中/错词规则还会尝试基于 `jieba` 分词和 `pypinyin` 的无声调拼音匹配，以提高 `拖天/托天`、`开工/开弓` 这类同音错词的召回率；如果运行环境缺少这些库，会降级使用内置的常用字拼音表。每个动作边界前后附近的片段会自动标记为需要复核，避免跨动作片段直接进入训练集。片段文件名中的原视频名如果包含空格，后续新切片会折叠为下划线，已有片段在 CSV 和 JSON manifest 的 `source_video` 字段中也会统一规整。
+
+人工修改 CSV 后，再次运行同一命令会优先读取已有 CSV 并继续复制分类文件夹，不会覆盖 CSV。若希望按修改后的 CSV 重建分类目录并清掉旧位置的复制件，使用：
+
+```bash
+python -m autocut.baduanjin_label ./test/test6_name --clean-output
+```
+
+需要重新自动生成标签时使用：
+
+```bash
+python -m autocut.baduanjin_label ./test/test6_name --force
+```
+
+默认是复制视频，不会移动原始片段；如只想生成 CSV 不复制文件夹：
+
+```bash
+python -m autocut.baduanjin_label ./test/test6_name --no-copy
+```
+
+### 24式太极拳片段打标
+
+24式简化太极拳也支持同样的片段命名规则和 CSV 复核流程，标签粒度是 24 个正式动作：
+
+```bash
+python -m autocut.taiji24_label ./test/taiji24_name
+```
+
+默认输出：
+
+```text
+./test/taiji24_name_labels.csv
+./test/taiji24_name_labeled/
+```
+
+CSV 字段和八段锦一致。`起势`、`收势` 会归入 `action`，开头寒暄/课程介绍归入 `irrelevant/opening`，完整收势后的感谢、关注、下次见等归入 `irrelevant/closing`。重复动作（例如两次 `单鞭`）会结合文本线索和动作顺序推断，边界附近或置信度不足的片段仍会标记 `review=yes` 方便人工复核。
+
+常用参数也和八段锦一致：
+
+```bash
+python -m autocut.taiji24_label ./test/taiji24_name --clean-output
+python -m autocut.taiji24_label ./test/taiji24_name --force
+python -m autocut.taiji24_label ./test/taiji24_name --no-copy
+```
 
 
 ### 一些小提示

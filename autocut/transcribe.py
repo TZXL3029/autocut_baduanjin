@@ -37,21 +37,58 @@ class Transcribe:
         logging.info(f"Done Init model in {time.time() - tic:.1f} sec")
 
     def run(self):
-        for input in self.args.inputs:
+        for input in self._transcription_inputs():
             logging.info(f"Transcribing {input}")
-            name, _ = os.path.splitext(input)
-            if utils.check_exists(name + ".md", self.args.force):
+            output_base = self._output_base(input)
+            output_dir = os.path.dirname(output_base)
+            if getattr(self.args, "output_dir", None) and output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+
+            if utils.check_exists(output_base + ".md", self.args.force):
                 continue
 
             audio = utils.load_audio(input, sr=self.sampling_rate)
             speech_array_indices = self._detect_voice_activity(audio)
             transcribe_results = self._transcribe(input, audio, speech_array_indices)
 
-            output = name + ".srt"
+            output = output_base + ".srt"
             self._save_srt(output, transcribe_results)
             logging.info(f"Transcribed {input} to {output}")
-            self._save_md(name + ".md", output, input)
-            logging.info(f'Saved texts to {name + ".md"} to mark sentences')
+            self._save_md(output_base + ".md", output, input)
+            logging.info(f'Saved texts to {output_base + ".md"} to mark sentences')
+
+    def _transcription_inputs(self):
+        inputs = []
+        for input in self.args.inputs:
+            if not os.path.isdir(input):
+                inputs.append(input)
+                continue
+
+            media_files = [
+                os.path.join(input, name)
+                for name in sorted(os.listdir(input))
+                if os.path.isfile(os.path.join(input, name))
+                and self._is_transcribable_media(name)
+            ]
+            if media_files:
+                logging.info(
+                    f"Found {len(media_files)} media files in {input} for batch transcription"
+                )
+            else:
+                logging.warning(f"No media files found in {input}")
+            inputs.extend(media_files)
+        return inputs
+
+    def _is_transcribable_media(self, filename):
+        filename = filename.lower()
+        return utils.is_video(filename) or utils.is_audio(filename)
+
+    def _output_base(self, input):
+        name, _ = os.path.splitext(input)
+        output_dir = getattr(self.args, "output_dir", None)
+        if not output_dir:
+            return name
+        return os.path.join(output_dir, os.path.basename(name))
 
     def _detect_voice_activity(self, audio) -> List[SPEECH_ARRAY_INDEX]:
         """Detect segments that have voice activities"""
@@ -119,7 +156,7 @@ class Transcribe:
         md = utils.MD(md_fn, self.args.encoding)
         md.clear()
         md.add_done_editing(False)
-        md.add_video(os.path.basename(video_fn))
+        md.add_video(self._relative_video_path(md_fn, video_fn))
         md.add(
             f"\nTexts generated from [{os.path.basename(srt_fn)}]({os.path.basename(srt_fn)})."
             "Mark the sentences to keep for autocut.\n"
@@ -131,3 +168,12 @@ class Transcribe:
             pre = f"[{s.index},{sec // 60:02d}:{sec % 60:02d}]"
             md.add_task(False, f"{pre:11} {s.content.strip()}")
         md.write()
+
+    def _relative_video_path(self, md_fn, video_fn):
+        md_dir = os.path.dirname(os.path.abspath(md_fn)) or os.getcwd()
+        video_abs = os.path.abspath(video_fn)
+        try:
+            video_path = os.path.relpath(video_abs, md_dir)
+        except ValueError:
+            video_path = video_abs
+        return video_path.replace(os.sep, "/")

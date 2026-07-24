@@ -1,8 +1,11 @@
 import logging
 import os
+import tempfile
+from types import SimpleNamespace
 import unittest
 
 from parameterized import parameterized, param
+import srt
 
 from autocut.utils import MD
 from config import (
@@ -13,6 +16,89 @@ from config import (
     TEST_MEDIA_PATH,
 )
 from autocut.transcribe import Transcribe
+
+
+class TestTranscribeOutputPaths(unittest.TestCase):
+    def test_transcription_inputs_expands_folder_to_non_recursive_media(self):
+        transcribe = Transcribe.__new__(Transcribe)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            nested_dir = os.path.join(tmp_dir, "nested.mp4")
+            os.makedirs(nested_dir)
+            for name in [
+                "b.mov",
+                "a.mp4",
+                "audio.wav",
+                "voice.mp3",
+                "notes.md",
+                "c.MP4",
+            ]:
+                with open(os.path.join(tmp_dir, name), "wb"):
+                    pass
+            with open(os.path.join(nested_dir, "nested.mp4"), "wb"):
+                pass
+
+            transcribe.args = SimpleNamespace(inputs=[tmp_dir])
+
+            self.assertEqual(
+                transcribe._transcription_inputs(),
+                [
+                    os.path.join(tmp_dir, "a.mp4"),
+                    os.path.join(tmp_dir, "audio.wav"),
+                    os.path.join(tmp_dir, "b.mov"),
+                    os.path.join(tmp_dir, "c.MP4"),
+                    os.path.join(tmp_dir, "voice.mp3"),
+                ],
+            )
+
+    def test_transcription_inputs_keeps_file_inputs(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace(inputs=[os.path.join("media", "clip.mp4")])
+
+        self.assertEqual(
+            transcribe._transcription_inputs(),
+            [os.path.join("media", "clip.mp4")],
+        )
+
+    def test_output_base_uses_output_dir(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace(output_dir="out")
+
+        self.assertEqual(
+            transcribe._output_base(os.path.join("media", "clip.mp4")),
+            os.path.join("out", "clip"),
+        )
+
+    def test_save_md_links_video_relative_to_output_dir(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace(encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            media_dir = os.path.join(tmp_dir, "media")
+            output_dir = os.path.join(tmp_dir, "out")
+            os.makedirs(media_dir)
+            os.makedirs(output_dir)
+            video_fn = os.path.join(media_dir, "clip.mp4")
+            srt_fn = os.path.join(output_dir, "clip.srt")
+            md_fn = os.path.join(output_dir, "clip.md")
+
+            with open(video_fn, "wb"):
+                pass
+            subtitle = srt.Subtitle(
+                index=1,
+                start=srt.srt_timestamp_to_timedelta("00:00:00,000"),
+                end=srt.srt_timestamp_to_timedelta("00:00:01,000"),
+                content="hello",
+            )
+            with open(srt_fn, "wb") as f:
+                f.write(srt.compose([subtitle]).encode("utf-8"))
+
+            transcribe._save_md(md_fn, srt_fn, video_fn)
+
+            with open(md_fn, encoding="utf-8") as f:
+                md_content = f.read()
+
+        self.assertIn('src="../media/clip.mp4"', md_content)
 
 
 class TestTranscribe(unittest.TestCase):

@@ -2,11 +2,13 @@ from setuptools import setup, find_packages
 
 requirements = [
     "ffmpeg-python",
+    "jieba",
     "moviepy",
     "openai-whisper",
     "opencc-python-reimplemented",
     "parameterized",
     "pydub",
+    "pypinyin",
     "srt",
     "torchaudio",
     "tqdm",

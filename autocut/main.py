@@ -27,7 +27,10 @@ def main():
     parser.add_argument(
         "-c",
         "--cut",
-        help="Cut a video based on subtitles",
+        help=(
+            "Cut media based on subtitles. Accepts media+srt, media files, "
+            "or media folders with auto-matched .srt files."
+        ),
         action=argparse.BooleanOptionalAction,
     )
     parser.add_argument(
@@ -161,6 +164,24 @@ def main():
         choices=["cpu", "cuda"],
         help="Force to CPU or GPU for transcribing. In default automatically use GPU if available.",
     )
+    # ------------------ 新增参数：指定输出文件夹 ------------------
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        default=None,
+        help=(
+            "Directory to save generated transcription files or cut segments. "
+            "If not provided, saves alongside the input video."
+        ),
+    )
+    # ------------------ 新增参数：仅按照开始时间切割 ------------------
+    parser.add_argument(
+        "--cut-by-start",
+        help="Cut video continuously from one subtitle's start time to the next",
+        action=argparse.BooleanOptionalAction,
+    )
+    # -----------------------------------------------------------
 
     args = parser.parse_args()
 
