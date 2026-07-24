@@ -50,6 +50,7 @@ class TestArgs:
         self.sampling_rate = 16000
         self.lang = "zh"
         self.prompt = ""
+        self.transcribe_profile = "auto"
         self.whisper_model = "small"
         self.device = None
         self.vad = False
