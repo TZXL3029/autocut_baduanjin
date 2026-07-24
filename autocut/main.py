@@ -119,16 +119,6 @@ def main():
         "--prompt", type=str, default="", help="initial prompt feed into whisper"
     )
     parser.add_argument(
-        "--transcribe-profile",
-        type=str,
-        default="auto",
-        help=(
-            "Transcription parameter profile. Use auto to choose from the input "
-            "path/name, default to disable routine-specific tuning, or a named "
-            "profile such as baduanjin, taiji24, or taijiquan."
-        ),
-    )
-    parser.add_argument(
         "--whisper-mode",
         type=str,
         default=WhisperMode.WHISPER.value,

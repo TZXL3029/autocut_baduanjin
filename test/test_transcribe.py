@@ -15,34 +15,10 @@ from config import (
     TEST_MEDIA_FILE_LANG,
     TEST_MEDIA_PATH,
 )
-from autocut.transcribe import (
-    TRANSCRIBE_PROFILE_BY_NAME,
-    TRANSCRIBE_PROFILES,
-    Transcribe,
-    TranscribeProfile,
-    register_transcribe_profile,
-)
+from autocut.transcribe import Transcribe
 
 
 class TestTranscribeOutputPaths(unittest.TestCase):
-    def _profile_args(self, **overrides):
-        defaults = {
-            "inputs": [],
-            "lang": "zh",
-            "prompt": "",
-            "transcribe_profile": "auto",
-            "whisper_mode": "whisper",
-            "whisper_model": "small",
-            "device": None,
-            "openai_rpm": 3,
-            "vad": "auto",
-            "encoding": "utf-8",
-            "force": False,
-            "output_dir": None,
-        }
-        defaults.update(overrides)
-        return SimpleNamespace(**defaults)
-
     def test_transcription_inputs_expands_folder_to_non_recursive_media(self):
         transcribe = Transcribe.__new__(Transcribe)
 
@@ -122,88 +98,7 @@ class TestTranscribeOutputPaths(unittest.TestCase):
             with open(md_fn, encoding="utf-8") as f:
                 md_content = f.read()
 
-            self.assertIn('src="../media/clip.mp4"', md_content)
-
-    def test_auto_profile_matches_baduanjin_input(self):
-        transcribe = Transcribe.__new__(Transcribe)
-        transcribe.args = self._profile_args()
-
-        args = transcribe._args_for_input(os.path.join("courses", "八段锦", "clip.mp4"))
-
-        self.assertEqual(args.transcribe_profile_name, "baduanjin")
-        self.assertEqual(args.lang, "zh")
-        self.assertEqual(args.vad, "1")
-        self.assertIn("两手托天理三焦", args.prompt)
-
-    def test_auto_profile_matches_taiji_input(self):
-        transcribe = Transcribe.__new__(Transcribe)
-        transcribe.args = self._profile_args()
-
-        args = transcribe._args_for_input(
-            os.path.join("courses", "taiji24", "clip.mp4")
-        )
-
-        self.assertEqual(args.transcribe_profile_name, "taiji24")
-        self.assertIn("左右野马分鬃", args.prompt)
-
-    def test_manual_profile_does_not_require_input_name_match(self):
-        transcribe = Transcribe.__new__(Transcribe)
-        transcribe.args = self._profile_args(transcribe_profile="taiji24")
-
-        args = transcribe._args_for_input(
-            os.path.join("courses", "unknown", "clip.mp4")
-        )
-
-        self.assertEqual(args.transcribe_profile_name, "taiji24")
-        self.assertIn("二十四式太极拳", args.prompt)
-
-    def test_manual_profile_accepts_taijiquan_alias(self):
-        transcribe = Transcribe.__new__(Transcribe)
-        transcribe.args = self._profile_args(transcribe_profile="taijiquan")
-
-        args = transcribe._args_for_input(
-            os.path.join("courses", "unknown", "clip.mp4")
-        )
-
-        self.assertEqual(args.transcribe_profile_name, "taiji24")
-        self.assertIn("二十四式太极拳", args.prompt)
-
-    def test_user_prompt_is_appended_to_profile_prompt(self):
-        transcribe = Transcribe.__new__(Transcribe)
-        transcribe.args = self._profile_args(prompt="请保留节拍口令")
-
-        args = transcribe._args_for_input(
-            os.path.join("courses", "baduanjin", "clip.mp4")
-        )
-
-        self.assertIn("两手托天理三焦", args.prompt)
-        self.assertTrue(args.prompt.endswith("请保留节拍口令"))
-
-    def test_register_transcribe_profile_adds_extension_point(self):
-        profile = TranscribeProfile(
-            name="custom_test",
-            match_terms=("custom_test",),
-            overrides={"prompt": "自定义项目"},
-        )
-
-        try:
-            register_transcribe_profile(profile)
-            transcribe = Transcribe.__new__(Transcribe)
-            transcribe.args = self._profile_args()
-
-            args = transcribe._args_for_input(
-                os.path.join("courses", "custom_test", "clip.mp4")
-            )
-
-            self.assertEqual(args.transcribe_profile_name, "custom_test")
-            self.assertEqual(args.prompt, "自定义项目")
-        finally:
-            TRANSCRIBE_PROFILE_BY_NAME.pop("custom_test", None)
-            TRANSCRIBE_PROFILES[:] = [
-                existing
-                for existing in TRANSCRIBE_PROFILES
-                if existing.name != "custom_test"
-            ]
+        self.assertIn('src="../media/clip.mp4"', md_content)
 
 
 class TestTranscribe(unittest.TestCase):
