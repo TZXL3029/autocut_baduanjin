@@ -148,6 +148,8 @@ vocal_extractor/.agents/
 *.flac
 output
 output/
+subtitle
+subtitle/
 
 # test
 test/*.pyc
