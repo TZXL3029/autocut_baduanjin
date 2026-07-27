@@ -208,6 +208,13 @@ autocut -c 22-52-00.mp4 22-52-00.srt 22-52-00.md
    autocut -c vocal_extractor/videos/test3.mp4 -o test/test3_name --cut-by-start --force
    ```
 
+   如果字幕集中放在另一个目录，可以通过 `--srt-dir` 指定字幕目录。单个视频和批量视频目录都支持，字幕文件匹配规则与自动匹配逻辑一致：
+
+   ```bash
+   autocut -c vocal_extractor/videos/test3.mp4 --srt-dir subtitle -o test/test3_name --cut-by-start --force
+   autocut -c vocal_extractor/videos --srt-dir subtitle -o test --cut-by-start --force
+   ```
+
    也可以传入视频目录，批量切割该目录当前层的所有视频和音频文件（不递归子目录）。指定 `-o` 时，每个视频会输出到独立子目录，例如 `test/test3_name`：
 
    ```bash

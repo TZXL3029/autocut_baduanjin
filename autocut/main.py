@@ -187,6 +187,12 @@ def main():
             "If not provided, saves alongside the input video."
         ),
     )
+    parser.add_argument(
+        "--srt-dir",
+        type=str,
+        default=None,
+        help="Directory to search for matching .srt files when cutting media.",
+    )
     # ------------------ 新增参数：仅按照开始时间切割 ------------------
     parser.add_argument(
         "--cut-by-start",

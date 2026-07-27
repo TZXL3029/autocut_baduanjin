@@ -88,6 +88,58 @@ class TestCutBatchInputs(unittest.TestCase):
                 ["a.mp4", "b.mp3"],
             )
 
+    def test_cut_jobs_match_srt_dir_for_single_media_input(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            media_dir = os.path.join(tmp_dir, "videos")
+            srt_dir = os.path.join(tmp_dir, "subtitles")
+            os.makedirs(media_dir)
+            os.makedirs(srt_dir)
+            media_fn = os.path.join(media_dir, "lesson01.mp4")
+            srt_fn = os.path.join(srt_dir, "lesson01.srt")
+            open(media_fn, "w").close()
+            open(srt_fn, "w").close()
+
+            args = TestArgs()
+            args.inputs = [media_fn]
+            args.srt_dir = srt_dir
+
+            jobs = Cutter(args)._cut_jobs()
+
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(os.path.abspath(jobs[0]["srt"]), os.path.abspath(srt_fn))
+
+    def test_cut_jobs_match_srt_dir_for_batch_media_directory(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            media_dir = os.path.join(tmp_dir, "videos")
+            srt_dir = os.path.join(tmp_dir, "subtitles")
+            os.makedirs(media_dir)
+            os.makedirs(srt_dir)
+            media_a = os.path.join(media_dir, "lesson01.mp4")
+            media_b = os.path.join(media_dir, "lesson02.mp3")
+            srt_a = os.path.join(srt_dir, "lesson01.srt")
+            srt_b = os.path.join(srt_dir, "lesson02_vocals_cleaned.srt")
+            open(media_a, "w").close()
+            open(media_b, "w").close()
+            open(srt_a, "w").close()
+            open(srt_b, "w").close()
+
+            args = TestArgs()
+            args.inputs = [media_dir]
+            args.srt_dir = srt_dir
+
+            jobs = Cutter(args)._cut_jobs()
+
+            self.assertEqual(
+                [
+                    (os.path.basename(job["media"]), os.path.basename(job["srt"]))
+                    for job in jobs
+                ],
+                [
+                    ("lesson01.mp4", "lesson01.srt"),
+                    ("lesson02.mp3", "lesson02_vocals_cleaned.srt"),
+                ],
+            )
+
     def test_output_dir_uses_media_name_subdirectories_for_batch_jobs(self):
         args = TestArgs()
         args.output_dir = "out"

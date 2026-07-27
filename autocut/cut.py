@@ -177,6 +177,9 @@ class Cutter:
 
     def _srt_search_dirs(self, media_fn):
         dirs = [os.path.dirname(media_fn) or ".", os.getcwd()]
+        srt_dir = getattr(self.args, "srt_dir", None)
+        if srt_dir and os.path.isdir(srt_dir):
+            dirs.append(srt_dir)
         output_dir = getattr(self.args, "output_dir", None)
         if output_dir and os.path.isdir(output_dir):
             dirs.append(output_dir)

@@ -58,3 +58,4 @@ class TestArgs:
             "faster" if os.environ.get("WHISPER_MODE") == "faster" else "whisper"
         )
         self.openai_rpm = 3
+        self.srt_dir = None
