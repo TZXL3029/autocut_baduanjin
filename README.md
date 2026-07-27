@@ -136,6 +136,30 @@ autocut -t ./videos
 autocut -t 22-52-00.mp4 -o ./output
 ```
 
+`-t` 会根据输入文件名或路径自动选择部分转录参数组。目前内置了 `default`、`baduanjin` 和 `taiji` 三组，用来调整 VAD 语音片段切分参数。没有匹配到特定关键词时使用默认参数。
+
+| 参数组 | 自动匹配关键词 | `remove_short_segments` | `expand_segments` | `merge_adjacent_segments` |
+|---|---|---:|---:|---:|
+| `default` | 未命中特定关键词 | `1.0` | `(0.2, 0.0)` | `0.5` |
+| `baduanjin` | `八段锦`、`八段錦`、`baduanjin`、`ba duan jin`、`bdj` | `0.3` | `(0.2, 0.1)` | `0.7` |
+| `taiji` | `太极拳`、`太極拳`、`太极`、`太極`、`taiji`、`taijiquan` | `0.2` | `(0.2, 0.1)` | `0.5` |
+
+例如输入路径中包含 `八段锦` 时会自动使用八段锦参数：
+
+```bash
+autocut -t ./videos/八段锦
+```
+
+也可以通过命令行显式指定参数组。显式参数优先级高于文件名或路径自动匹配：
+
+```bash
+autocut -t ./videos/class01.mp4 --baduanjin
+autocut -t ./videos/class02.mp4 --taiji
+autocut -t ./videos/class02.mp4 --taiji24
+```
+
+`--baduanjin` 和 `--taiji` / `--taiji24` 不能同时使用。后续如果需要支持其他输入类型，可以在 `autocut/transcribe.py` 中追加新的 `TranscribeProfile`，或通过 `register_transcribe_profile(...)` 注册新的参数组。
+
 1. 如果对转录质量不满意，可以使用更大的模型，例如
 
     ```bash
