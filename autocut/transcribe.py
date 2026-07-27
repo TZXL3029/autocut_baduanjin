@@ -1,7 +1,9 @@
 import logging
 import os
+import re
 import time
-from typing import List, Any
+from dataclasses import dataclass
+from typing import List, Any, Sequence
 
 import numpy as np
 import srt
@@ -9,6 +11,71 @@ import torch
 
 from . import utils, whisper_model
 from .type import WhisperMode, SPEECH_ARRAY_INDEX
+
+
+@dataclass(frozen=True)
+class VadParameters:
+    remove_short_sec: float
+    expand_head_sec: float
+    expand_tail_sec: float
+    merge_gap_sec: float
+
+
+@dataclass(frozen=True)
+class TranscribeProfile:
+    name: str
+    match_terms: Sequence[str]
+    vad_parameters: VadParameters
+
+
+DEFAULT_VAD_PARAMETERS = VadParameters(
+    remove_short_sec=1.0,
+    expand_head_sec=0.2,
+    expand_tail_sec=0.0,
+    merge_gap_sec=0.5,
+)
+
+TRANSCRIBE_PROFILES = [
+    TranscribeProfile(
+        name="default",
+        match_terms=(),
+        vad_parameters=DEFAULT_VAD_PARAMETERS,
+    ),
+    TranscribeProfile(
+        name="baduanjin",
+        match_terms=("八段锦", "八段錦", "baduanjin", "ba duan jin", "bdj"),
+        vad_parameters=VadParameters(
+            remove_short_sec=0.3,
+            expand_head_sec=0.2,
+            expand_tail_sec=0.1,
+            merge_gap_sec=0.7,
+        ),
+    ),
+    TranscribeProfile(
+        name="taiji",
+        match_terms=("太极拳", "太極拳", "太极", "太極", "taiji", "taijiquan"),
+        vad_parameters=VadParameters(
+            remove_short_sec=0.2,
+            expand_head_sec=0.2,
+            expand_tail_sec=0.1,
+            merge_gap_sec=0.5,
+        ),
+    ),
+]
+
+TRANSCRIBE_PROFILE_BY_NAME = {
+    profile.name: profile for profile in TRANSCRIBE_PROFILES
+}
+
+
+def register_transcribe_profile(profile: TranscribeProfile) -> None:
+    for index, existing in enumerate(TRANSCRIBE_PROFILES):
+        if existing.name == profile.name:
+            TRANSCRIBE_PROFILES[index] = profile
+            break
+    else:
+        TRANSCRIBE_PROFILES.append(profile)
+    TRANSCRIBE_PROFILE_BY_NAME[profile.name] = profile
 
 
 class Transcribe:
@@ -38,7 +105,8 @@ class Transcribe:
 
     def run(self):
         for input in self._transcription_inputs():
-            logging.info(f"Transcribing {input}")
+            profile = self._profile_for_input(input)
+            logging.info(f"Transcribing {input} with profile {profile.name}")
             output_base = self._output_base(input)
             output_dir = os.path.dirname(output_base)
             if getattr(self.args, "output_dir", None) and output_dir:
@@ -48,7 +116,9 @@ class Transcribe:
                 continue
 
             audio = utils.load_audio(input, sr=self.sampling_rate)
-            speech_array_indices = self._detect_voice_activity(audio)
+            speech_array_indices = self._detect_voice_activity(
+                audio, profile.vad_parameters
+            )
             transcribe_results = self._transcribe(input, audio, speech_array_indices)
 
             output = output_base + ".srt"
@@ -90,7 +160,33 @@ class Transcribe:
             return name
         return os.path.join(output_dir, os.path.basename(name))
 
-    def _detect_voice_activity(self, audio) -> List[SPEECH_ARRAY_INDEX]:
+    def _profile_for_input(self, input) -> TranscribeProfile:
+        explicit_profile = self._explicit_profile()
+        if explicit_profile is not None:
+            return explicit_profile
+
+        input_text = self._normalize_profile_text(os.path.abspath(input))
+        for profile in TRANSCRIBE_PROFILES:
+            if profile.name == "default":
+                continue
+            for term in profile.match_terms:
+                if self._normalize_profile_text(term) in input_text:
+                    return profile
+        return TRANSCRIBE_PROFILE_BY_NAME["default"]
+
+    def _explicit_profile(self):
+        if getattr(self.args, "baduanjin", False):
+            return TRANSCRIBE_PROFILE_BY_NAME["baduanjin"]
+        if getattr(self.args, "taiji", False):
+            return TRANSCRIBE_PROFILE_BY_NAME["taiji"]
+        return None
+
+    def _normalize_profile_text(self, text):
+        return re.sub(r"[\s_\-]+", "", text.lower())
+
+    def _detect_voice_activity(
+        self, audio, vad_parameters: VadParameters = DEFAULT_VAD_PARAMETERS
+    ) -> List[SPEECH_ARRAY_INDEX]:
         """Detect segments that have voice activities"""
         if self.args.vad == "0":
             return [{"start": 0, "end": len(audio)}]
@@ -110,15 +206,22 @@ class Transcribe:
         )
 
         # Remove too short segments
-        speeches = utils.remove_short_segments(speeches, 1.0 * self.sampling_rate)
+        speeches = utils.remove_short_segments(
+            speeches, vad_parameters.remove_short_sec * self.sampling_rate
+        )
 
         # Expand to avoid to tight cut. You can tune the pad length
         speeches = utils.expand_segments(
-            speeches, 0.2 * self.sampling_rate, 0.0 * self.sampling_rate, audio.shape[0]
+            speeches,
+            vad_parameters.expand_head_sec * self.sampling_rate,
+            vad_parameters.expand_tail_sec * self.sampling_rate,
+            audio.shape[0],
         )
 
         # Merge very closed segments
-        speeches = utils.merge_adjacent_segments(speeches, 0.5 * self.sampling_rate)
+        speeches = utils.merge_adjacent_segments(
+            speeches, vad_parameters.merge_gap_sec * self.sampling_rate
+        )
 
         logging.info(f"Done voice activity detection in {time.time() - tic:.1f} sec")
         return speeches if len(speeches) > 1 else [{"start": 0, "end": len(audio)}]

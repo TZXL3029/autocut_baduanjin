@@ -150,6 +150,18 @@ def main():
         "--vad", help="If or not use VAD", choices=["1", "0", "auto"], default="auto"
     )
     parser.add_argument(
+        "--baduanjin",
+        help="Use the Baduanjin transcription profile for VAD parameters",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--taiji",
+        "--taiji24",
+        dest="taiji",
+        help="Use the Taijiquan transcription profile for VAD parameters",
+        action="store_true",
+    )
+    parser.add_argument(
         "--force",
         help="Force write even if files exist",
         action=argparse.BooleanOptionalAction,
@@ -184,6 +196,8 @@ def main():
     # -----------------------------------------------------------
 
     args = parser.parse_args()
+    if args.baduanjin and args.taiji:
+        parser.error("--baduanjin and --taiji/--taiji24 cannot be used together")
 
     if args.transcribe:
         from .transcribe import Transcribe

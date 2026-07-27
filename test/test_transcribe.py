@@ -15,7 +15,14 @@ from config import (
     TEST_MEDIA_FILE_LANG,
     TEST_MEDIA_PATH,
 )
-from autocut.transcribe import Transcribe
+from autocut.transcribe import (
+    TRANSCRIBE_PROFILE_BY_NAME,
+    TRANSCRIBE_PROFILES,
+    Transcribe,
+    TranscribeProfile,
+    VadParameters,
+    register_transcribe_profile,
+)
 
 
 class TestTranscribeOutputPaths(unittest.TestCase):
@@ -99,6 +106,97 @@ class TestTranscribeOutputPaths(unittest.TestCase):
                 md_content = f.read()
 
         self.assertIn('src="../media/clip.mp4"', md_content)
+
+    def test_default_profile_keeps_existing_vad_parameters(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace()
+
+        profile = transcribe._profile_for_input(os.path.join("media", "clip.mp4"))
+
+        self.assertEqual(profile.name, "default")
+        self.assertEqual(profile.vad_parameters.remove_short_sec, 1.0)
+        self.assertEqual(profile.vad_parameters.expand_head_sec, 0.2)
+        self.assertEqual(profile.vad_parameters.expand_tail_sec, 0.0)
+        self.assertEqual(profile.vad_parameters.merge_gap_sec, 0.5)
+
+    def test_baduanjin_profile_uses_short_command_vad_parameters(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace()
+
+        profile = transcribe._profile_for_input(
+            os.path.join("courses", "八段锦", "clip.mp4")
+        )
+
+        self.assertEqual(profile.name, "baduanjin")
+        self.assertEqual(profile.vad_parameters.remove_short_sec, 0.3)
+        self.assertEqual(profile.vad_parameters.expand_head_sec, 0.2)
+        self.assertEqual(profile.vad_parameters.expand_tail_sec, 0.1)
+        self.assertEqual(profile.vad_parameters.merge_gap_sec, 0.7)
+
+    def test_taiji_profile_uses_confirmed_vad_parameters(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace()
+
+        profile = transcribe._profile_for_input(
+            os.path.join("courses", "taijiquan", "clip.mp4")
+        )
+
+        self.assertEqual(profile.name, "taiji")
+        self.assertEqual(profile.vad_parameters.remove_short_sec, 0.2)
+        self.assertEqual(profile.vad_parameters.expand_head_sec, 0.2)
+        self.assertEqual(profile.vad_parameters.expand_tail_sec, 0.1)
+        self.assertEqual(profile.vad_parameters.merge_gap_sec, 0.5)
+
+    def test_baduanjin_flag_forces_profile(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace(baduanjin=True, taiji=False)
+
+        profile = transcribe._profile_for_input(os.path.join("courses", "clip.mp4"))
+
+        self.assertEqual(profile.name, "baduanjin")
+        self.assertEqual(profile.vad_parameters.remove_short_sec, 0.3)
+
+    def test_taiji_flag_forces_profile_over_input_name(self):
+        transcribe = Transcribe.__new__(Transcribe)
+        transcribe.args = SimpleNamespace(baduanjin=False, taiji=True)
+
+        profile = transcribe._profile_for_input(
+            os.path.join("courses", "八段锦", "clip.mp4")
+        )
+
+        self.assertEqual(profile.name, "taiji")
+        self.assertEqual(profile.vad_parameters.remove_short_sec, 0.2)
+
+    def test_register_transcribe_profile_adds_extension_point(self):
+        profile = TranscribeProfile(
+            name="custom_test",
+            match_terms=("custom_test",),
+            vad_parameters=VadParameters(
+                remove_short_sec=0.4,
+                expand_head_sec=0.1,
+                expand_tail_sec=0.2,
+                merge_gap_sec=0.6,
+            ),
+        )
+
+        try:
+            register_transcribe_profile(profile)
+            transcribe = Transcribe.__new__(Transcribe)
+            transcribe.args = SimpleNamespace()
+
+            matched_profile = transcribe._profile_for_input(
+                os.path.join("courses", "custom_test", "clip.mp4")
+            )
+
+            self.assertEqual(matched_profile.name, "custom_test")
+            self.assertEqual(matched_profile.vad_parameters.remove_short_sec, 0.4)
+        finally:
+            TRANSCRIBE_PROFILE_BY_NAME.pop("custom_test", None)
+            TRANSCRIBE_PROFILES[:] = [
+                existing
+                for existing in TRANSCRIBE_PROFILES
+                if existing.name != "custom_test"
+            ]
 
 
 class TestTranscribe(unittest.TestCase):

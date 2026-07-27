@@ -24,16 +24,16 @@ from autocut import Transcribe, load_audio
 
 ```shell
 # for whisper only
-pip install .
+python -m pip install -e .
 
 # for whisper and faster-whisper
-pip install '.[faster]'
+python -m pip install -e ".[faster]"
 
-# for whisper and openai-whisper
-pip install '.[openai]'
+# for whisper and OpenAI API
+python -m pip install -e ".[openai]"
 
-# for all
-pip install '.[all]'
+# for all optional dependencies
+python -m pip install -e ".[all]"
 ```
 
 ```shell
@@ -73,10 +73,10 @@ AutoCut 将持续对这个文件夹里视频进行字幕抽取和剪切。例如
 
 ## 安装
 
-首先安装 Python 包
+首先安装 Python 包。项目没有单独的 `requirements.txt`，运行下面的命令会根据 `setup.py` 自动安装运行所需依赖。
 
 ```
-pip install git+https://github.com/mli/autocut.git
+python -m pip install git+https://github.com/mli/autocut.git
 ```
 
 ## 本地安装测试
@@ -85,7 +85,15 @@ pip install git+https://github.com/mli/autocut.git
 ```
 git clone https://github.com/mli/autocut
 cd autocut
-pip install .
+python -m pip install -e .
+```
+
+如果需要额外安装 faster-whisper 或 OpenAI API 支持，可以使用：
+
+```
+python -m pip install -e ".[faster]"
+python -m pip install -e ".[openai]"
+python -m pip install -e ".[all]"
 ```
 
 
@@ -305,7 +313,7 @@ autocut
 
 ### 安装依赖
 开始安装这个项目的需要的依赖之前，建议先了解一下 Anaconda 或者 venv 的虚拟环境使用，推荐**使用虚拟环境来搭建该项目的开发环境**。
-具体安装方式为在你搭建搭建的虚拟环境之中按照[上方安装步骤](./README.md#安装)进行安装。
+具体安装方式为在你搭建的虚拟环境之中按照[本地安装测试](./README.md#本地安装测试)进行安装。这个项目通过 `setup.py` 声明依赖，不需要 `pip install -r requirements.txt`。
 
 > 为什么推荐使用虚拟环境开发？
 >
@@ -335,5 +343,5 @@ autocut
 1. commit 信息用英文描述清楚你做了哪些修改即可，小写字母开头。
 2. 最好可以保证一次的 commit 涉及的修改比较小，可以简短地描述清楚，这样也方便之后有修改时的查找。
 3. PR 的时候 title 简述有哪些修改， contents 可以具体写下修改内容。
-4. run test `pip install pytest` then `pytest test`
-5. run lint `pip install black` then `black .`
+4. run test `python -m pip install pytest` then `python -m pytest test`
+5. run lint `python -m pip install black` then `python -m black .`
