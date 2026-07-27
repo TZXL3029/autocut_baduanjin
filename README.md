@@ -169,6 +169,31 @@ autocut -t ./videos/class02.mp4 --taiji24
     默认是 `small`。更好的模型是 `medium` 和 `large`，但推荐使用 GPU 获得更好的速度。也可以使用更快的 `tiny` 和 `base`，但转录质量会下降。
 
 
+### 清理 `<No Speech>` 字幕块
+
+如果转录结果里包含 `<No Speech>` 或 `No Speech` 字幕块，可以用 `cleanSrt.py` 重新编号并生成清理后的 `.srt` 文件。
+
+清理单个字幕文件：
+
+```bash
+python cleanSrt.py 22-52-00.srt
+```
+
+默认输出到原字幕同目录，文件名追加 `_cleaned`：
+
+```text
+22-52-00_cleaned.srt
+```
+
+也可以传入目录，批量清理该目录当前层的 `.srt` 文件，不递归子目录，并跳过已经以 `_cleaned.srt` 结尾的文件：
+
+```bash
+python cleanSrt.py ./videos
+```
+
+`cleanSrt.py` 支持清理非当前目录下的文件或目录，但当前不支持指定单独的输出目录；清理后的文件始终写在输入 `.srt` 所在目录。
+
+
 ### 剪切某个视频
 
 ```bash
