@@ -438,8 +438,9 @@ autocut/
 │  ├─package_transcribe.py # Python import 转录接口
 │  ├─whisper_model.py    # whisper / faster-whisper / OpenAI 适配
 │  ├─routine_label.py    # 八段锦和太极打标共用逻辑
-│  ├─baduanjin_label.py
-│  ├─taiji24_label.py
+│  ├─pinyin_utils.py     # 基于 pypinyin 的关键词同音匹配工具
+│  ├─baduanjin_label.py  # 八段锦打标兼容入口
+│  ├─taiji24_label.py    # 24 式太极拳打标兼容入口
 │  ├─label_configs/      # 八段锦和 24 式太极拳动作关键词与标签规则 JSON
 │  ├─type.py
 │  └─utils.py
@@ -471,7 +472,7 @@ autocut/
 6. `whisper_model.py` 封装 `whisper`、`faster-whisper` 和 OpenAI Whisper API 的模型差异。
 7. `cut.py` 提供根据标记后 `.md` 或 `.srt` 进行媒体剪切、片段导出和合并的功能。
 8. `daemon.py` 提供监听文件夹生成字幕、剪切媒体和合并视频的功能。
-9. `routine_label.py` 是动作片段打标的共用框架；八段锦和 24 式太极拳分别通过 `baduanjin_label.py` 和 `taiji24_label.py` 暴露兼容入口，动作关键词和标签规则放在 `autocut/label_configs/*.json`。
+9. `routine_label.py` 是动作片段打标的共用框架；八段锦和 24 式太极拳分别通过 `baduanjin_label.py` 和 `taiji24_label.py` 暴露兼容入口，动作关键词和标签规则放在 `autocut/label_configs/*.json`，拼音同音匹配集中在 `pinyin_utils.py`。
 10. `vocal_extractor/` 是独立工具目录，不属于 `autocut` 包入口。
 
 开发过程中请尽量保证修改在正确的地方，以及合理地复用代码，

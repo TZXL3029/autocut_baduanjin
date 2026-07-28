@@ -7,20 +7,22 @@ import re
 import shutil
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 try:
-    import jieba
-
-    jieba.setLogLevel(logging.WARNING)
-except ImportError:  # pragma: no cover - optional dependency
-    jieba = None
-
-try:
-    from pypinyin import lazy_pinyin
-except ImportError:  # pragma: no cover - optional dependency
-    lazy_pinyin = None
+    from .pinyin_utils import (
+        contains_by_pinyin as _contains_by_pinyin,
+        contains_by_text as _contains_by_text,
+        normalize_text,
+        text_to_pinyin,
+    )
+except ImportError:  # pragma: no cover - supports direct script execution
+    from pinyin_utils import (  # type: ignore
+        contains_by_pinyin as _contains_by_pinyin,
+        contains_by_text as _contains_by_text,
+        normalize_text,
+        text_to_pinyin,
+    )
 
 
 CSV_FIELDS = [
@@ -82,205 +84,7 @@ ACTION_LABELS: Dict[int, str] = {}
 ACTION_RULES: Dict[int, Dict[str, Sequence[str]]] = {}
 INTRO_OUTRO_RULES: Dict[str, Sequence[str]] = {}
 CLOSING_IRRELEVANT_RULES: Dict[str, Sequence[str]] = {}
-FALLBACK_PINYIN = {
-    "两": "liang",
-    "手": "shou",
-    "托": "tuo",
-    "拖": "tuo",
-    "天": "tian",
-    "理": "li",
-    "三": "san",
-    "焦": "jiao",
-    "左": "zuo",
-    "右": "you",
-    "开": "kai",
-    "弓": "gong",
-    "工": "gong",
-    "公": "gong",
-    "似": "si",
-    "射": "she",
-    "雕": "diao",
-    "调": "tiao",
-    "脾": "pi",
-    "胃": "wei",
-    "须": "xu",
-    "单": "dan",
-    "举": "ju",
-    "辽": "liao",
-    "宜": "yi",
-    "品": "pin",
-    "味": "wei",
-    "五": "wu",
-    "劳": "lao",
-    "老": "lao",
-    "七": "qi",
-    "伤": "shang",
-    "古": "gu",
-    "往": "wang",
-    "后": "hou",
-    "瞧": "qiao",
-    "桥": "qiao",
-    "摇": "yao",
-    "头": "tou",
-    "摆": "bai",
-    "尾": "wei",
-    "白": "bai",
-    "去": "qu",
-    "心": "xin",
-    "火": "huo",
-    "攀": "pan",
-    "盘": "pan",
-    "潘": "pan",
-    "足": "zu",
-    "祖": "zu",
-    "固": "gu",
-    "肾": "shen",
-    "腰": "yao",
-    "瑶": "yao",
-    "要": "yao",
-    "攒": "zan",
-    "拳": "quan",
-    "怒": "nu",
-    "目": "mu",
-    "增": "zeng",
-    "气": "qi",
-    "力": "li",
-    "环": "huan",
-    "传": "chuan",
-    "承": "cheng",
-    "全": "quan",
-    "完": "wan",
-    "团": "tuan",
-    "背": "bei",
-    "颠": "dian",
-    "点": "dian",
-    "病": "bing",
-    "消": "xiao",
-    "销": "xiao",
-    "预": "yu",
-    "备": "bei",
-    "势": "shi",
-    "式": "shi",
-    "第": "di",
-    "一": "yi",
-    "二": "er",
-    "四": "si",
-    "六": "liu",
-    "八": "ba",
-    "个": "ge",
-    "动": "dong",
-    "作": "zuo",
-    "最": "zui",
-    "后": "hou",
-    "收": "shou",
-    "示": "shi",
-    "范": "fan",
-    "准": "zhun",
-    "脚": "jiao",
-    "步": "bu",
-    "与": "yu",
-    "间": "jian",
-    "同": "tong",
-    "宽": "kuan",
-    "屈": "qu",
-    "膝": "xi",
-    "凝": "ning",
-    "静": "jing",
-    "意": "yi",
-    "守": "shou",
-    "丹": "dan",
-    "田": "tian",
-    "顾": "gu",
-    "圣": "sheng",
-    "娇": "jiao",
-    "商": "shang",
-    "奉": "feng",
-    "侨": "qiao",
-    "乔": "qiao",
-    "虚": "xu",
-    "皮": "pi",
-    "腿": "tui",
-    "谱": "pu",
-    "拉": "la",
-    "搭": "da",
-    "万": "wan",
-    "抬": "tai",
-    "起": "qi",
-    "踵": "zhong",
-    "沉": "chen",
-    "视": "shi",
-    "合": "he",
-    "余": "yu",
-    "复": "fu",
-    "均": "jun",
-    "临": "lin",
-    "翔": "xiang",
-    "周": "zhou",
-    "臀": "tun",
-    "部": "bu",
-    "握": "wo",
-    "抓": "zhua",
-    "刷": "shua",
-    "物": "wu",
-    "出": "chu",
-}
-
-FALLBACK_PINYIN.update(
-    {
-        "太": "tai",
-        "极": "ji",
-        "拳": "quan",
-        "野": "ye",
-        "马": "ma",
-        "分": "fen",
-        "鬃": "zong",
-        "白": "bai",
-        "鹤": "he",
-        "亮": "liang",
-        "翅": "chi",
-        "搂": "lou",
-        "拗": "ao",
-        "琵": "pi",
-        "琶": "pa",
-        "倒": "dao",
-        "卷": "juan",
-        "肱": "gong",
-        "揽": "lan",
-        "雀": "que",
-        "尾": "wei",
-        "鞭": "bian",
-        "云": "yun",
-        "探": "tan",
-        "蹬": "deng",
-        "峰": "feng",
-        "贯": "guan",
-        "耳": "er",
-        "转": "zhuan",
-        "身": "shen",
-        "下": "xia",
-        "势": "shi",
-        "独": "du",
-        "立": "li",
-        "穿": "chuan",
-        "梭": "suo",
-        "海": "hai",
-        "底": "di",
-        "针": "zhen",
-        "闪": "shan",
-        "通": "tong",
-        "搬": "ban",
-        "拦": "lan",
-        "捶": "chui",
-        "如": "ru",
-        "封": "feng",
-        "闭": "bi",
-        "十": "shi",
-        "字": "zi",
-    }
-)
-
 CLIP_RE = re.compile(r"^(?P<source>.+)_(?P<index>\d+)_(?P<hint>.*)\.mp4$", re.I)
-CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 @dataclass
@@ -396,75 +200,8 @@ class TermMatch:
         return f"{self.level}:{self.term}:{self.method}"
 
 
-def normalize_text(text: str) -> str:
-    text = text.lower()
-    text = re.sub(r"\s+", "", text)
-    return re.sub(r"[^\w\u4e00-\u9fff]+", "", text)
-
-
 def normalize_source_video_name(name: str) -> str:
     return re.sub(r"\s+", "_", str(name or "").strip())
-
-
-def _has_chinese(text: str) -> bool:
-    return bool(CHINESE_RE.search(text))
-
-
-def _char_to_pinyin(char: str) -> str:
-    if not _has_chinese(char):
-        return char
-    if lazy_pinyin:
-        pinyin = lazy_pinyin(char, errors="ignore")
-        if pinyin:
-            return pinyin[0]
-    return FALLBACK_PINYIN.get(char, char)
-
-
-@lru_cache(maxsize=4096)
-def text_to_pinyin(text: str) -> str:
-    normalized = normalize_text(text)
-    if not normalized:
-        return ""
-    return "".join(_char_to_pinyin(char) for char in normalized)
-
-
-@lru_cache(maxsize=4096)
-def _segment_text(text: str) -> Tuple[str, ...]:
-    normalized = normalize_text(text)
-    if not normalized:
-        return ()
-    if jieba:
-        return tuple(token for token in jieba.lcut(normalized) if token)
-    return tuple(re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]", normalized))
-
-
-@lru_cache(maxsize=4096)
-def text_to_pinyin_tokens(text: str) -> Tuple[str, ...]:
-    return tuple(
-        pinyin for pinyin in (text_to_pinyin(token) for token in _segment_text(text)) if pinyin
-    )
-
-
-def _contains_by_text(text: str, term: str) -> bool:
-    return normalize_text(term) in normalize_text(text)
-
-
-def _contains_by_pinyin(text: str, term: str) -> bool:
-    if not _has_chinese(term):
-        return False
-    term_pinyin = text_to_pinyin(term)
-    if len(term_pinyin) < 4:
-        return False
-    text_tokens = text_to_pinyin_tokens(text)
-    term_tokens = text_to_pinyin_tokens(term)
-    if text_tokens and term_tokens:
-        max_window = min(len(text_tokens), len(term_tokens) + 1)
-        for window_size in range(1, max_window + 1):
-            for start in range(0, len(text_tokens) - window_size + 1):
-                window_pinyin = "".join(text_tokens[start : start + window_size])
-                if term_pinyin == window_pinyin or term_pinyin in window_pinyin:
-                    return True
-    return term_pinyin in text_to_pinyin(text)
 
 
 def _is_only_ignored_text(text: str) -> bool:
@@ -482,6 +219,7 @@ def _score_rule_terms(
 ) -> Tuple[int, Tuple[str, ...]]:
     score = 0
     matches = []
+    has_text_match = False
     if _is_only_ignored_text(text):
         return 0, ()
 
@@ -492,12 +230,15 @@ def _score_rule_terms(
             text_matched = _contains_by_text(text, term)
             pinyin_matched = (
                 not text_matched
+                and not has_text_match
                 and level in PINYIN_MATCH_LEVELS
                 and _contains_by_pinyin(text, term)
             )
             if not text_matched and not pinyin_matched:
                 continue
             method = "text" if text_matched else "pinyin"
+            if text_matched:
+                has_text_match = True
             level_matches.append(TermMatch(term, level, method, weight).note())
         if level_matches:
             score += weight
@@ -1421,6 +1162,125 @@ def main(config: RoutineConfig = DEFAULT_CONFIG) -> None:
         logging.info("  %s / %s: %d", big_label, action_label, count)
     if sync_counts:
         logging.info("Folder sync summary: %s", dict(sync_counts))
+
+
+def bind_routine_label_module(
+    module_globals: Dict[str, object],
+    config_name: str,
+    config_var_name: str,
+) -> RoutineConfig:
+    config = load_routine_config(config_name)
+
+    def configured_scan_clips(input_dir: str) -> List[ClipRecord]:
+        return scan_clips(
+            input_dir,
+            action_rules=config.action_rules,
+            intro_outro_rules=config.intro_outro_rules,
+        )
+
+    def configured_label_records(
+        records: Sequence[ClipRecord],
+    ) -> List[Dict[str, str]]:
+        return label_records(records, config)
+
+    def configured_auto_label_directory(input_dir: str) -> List[Dict[str, str]]:
+        return auto_label_directory(input_dir, config)
+
+    def configured_build_json_manifest(
+        rows: Sequence[Dict[str, str]],
+        input_dir: str,
+        csv_path: Optional[str] = None,
+        output_dir: Optional[str] = None,
+    ) -> Dict[str, object]:
+        return build_json_manifest(
+            rows,
+            input_dir,
+            config=config,
+            csv_path=csv_path,
+            output_dir=output_dir,
+        )
+
+    def configured_write_json_manifest(
+        rows: Sequence[Dict[str, str]],
+        json_path: str,
+        input_dir: str,
+        csv_path: Optional[str] = None,
+        output_dir: Optional[str] = None,
+    ) -> None:
+        write_json_manifest(
+            rows,
+            json_path,
+            input_dir,
+            config=config,
+            csv_path=csv_path,
+            output_dir=output_dir,
+        )
+
+    def configured_run(
+        input_dir: str,
+        csv_path: Optional[str] = None,
+        json_path: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        copy_files: bool = True,
+        write_json_file: bool = True,
+        force: bool = False,
+        move: bool = False,
+        dry_run: bool = False,
+        clean_output: bool = False,
+    ) -> Tuple[List[Dict[str, str]], Counter]:
+        return run(
+            input_dir,
+            config=config,
+            csv_path=csv_path,
+            json_path=json_path,
+            output_dir=output_dir,
+            copy_files=copy_files,
+            write_json_file=write_json_file,
+            force=force,
+            move=move,
+            dry_run=dry_run,
+            clean_output=clean_output,
+        )
+
+    def configured_main() -> None:
+        main(config)
+
+    module_globals.update(
+        {
+            config_var_name: config,
+            "ACTION_LABELS": config.action_labels,
+            "ACTION_RULES": config.action_rules,
+            "INTRO_LABEL": config.intro_label,
+            "OUTRO_LABEL": config.outro_label,
+            "OPENING_LABEL": config.opening_label,
+            "CLOSING_LABEL": config.closing_label,
+            "INTRO_OUTRO_RULES": config.intro_outro_rules,
+            "OPENING_RULES": config.intro_outro_rules,
+            "CLOSING_IRRELEVANT_RULES": config.closing_irrelevant_rules,
+            "CSV_FIELDS": CSV_FIELDS,
+            "ClipRecord": ClipRecord,
+            "RoutineConfig": RoutineConfig,
+            "auto_label_directory": configured_auto_label_directory,
+            "build_json_manifest": configured_build_json_manifest,
+            "build_parser": build_parser,
+            "default_csv_path": default_csv_path,
+            "default_json_path": default_json_path,
+            "default_output_dir": default_output_dir,
+            "label_folder_parts": label_folder_parts,
+            "label_records": configured_label_records,
+            "main": configured_main,
+            "parse_clip_filename": parse_clip_filename,
+            "read_csv": read_csv,
+            "run": configured_run,
+            "scan_clips": configured_scan_clips,
+            "summarize_rows": summarize_rows,
+            "sync_labeled_folders": sync_labeled_folders,
+            "text_to_pinyin": text_to_pinyin,
+            "write_csv": write_csv,
+            "write_json_manifest": configured_write_json_manifest,
+        }
+    )
+    return config
 
 
 if __name__ == "__main__":

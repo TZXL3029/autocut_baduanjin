@@ -173,7 +173,7 @@ class TestTaiji24Label(unittest.TestCase):
             self.assertEqual(by_index[120]["action_label"], "23_十字手")
             self.assertEqual(by_index[123]["action_label"], "24_收势")
 
-    def test_pinyin_fallback_includes_taiji_terms(self):
+    def test_pypinyin_handles_taiji_terms(self):
         self.assertEqual(text_to_pinyin("倒卷肱"), "daojuangong")
         self.assertEqual(text_to_pinyin("搬拦捶"), "banlanchui")
 
