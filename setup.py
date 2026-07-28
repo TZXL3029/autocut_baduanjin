@@ -25,6 +25,9 @@ setup(
     license="Apache License 2.0",
     long_description=open("README.md", "r", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
+    package_data={
+        "autocut": ["label_configs/*.json"],
+    },
     extras_require={
         "all": ["openai", "faster-whisper"],
         "openai": ["openai"],

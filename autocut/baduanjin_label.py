@@ -5,16 +5,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 try:
     from .routine_label import (
-        ACTION_LABELS,
-        ACTION_RULES,
-        CLOSING_IRRELEVANT_RULES,
-        CLOSING_LABEL,
         CSV_FIELDS,
-        DEFAULT_CONFIG as BADUANJIN_CONFIG,
-        INTRO_LABEL,
-        INTRO_OUTRO_RULES,
-        OPENING_LABEL,
-        OUTRO_LABEL,
         ClipRecord,
         RoutineConfig,
         auto_label_directory as _auto_label_directory,
@@ -25,6 +16,7 @@ try:
         default_output_dir,
         label_folder_parts,
         label_records as _label_records,
+        load_routine_config,
         main as _main,
         parse_clip_filename,
         read_csv,
@@ -39,16 +31,7 @@ try:
 except ImportError:  # pragma: no cover - supports direct script execution
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from routine_label import (  # type: ignore
-        ACTION_LABELS,
-        ACTION_RULES,
-        CLOSING_IRRELEVANT_RULES,
-        CLOSING_LABEL,
         CSV_FIELDS,
-        DEFAULT_CONFIG as BADUANJIN_CONFIG,
-        INTRO_LABEL,
-        INTRO_OUTRO_RULES,
-        OPENING_LABEL,
-        OUTRO_LABEL,
         ClipRecord,
         RoutineConfig,
         auto_label_directory as _auto_label_directory,
@@ -59,6 +42,7 @@ except ImportError:  # pragma: no cover - supports direct script execution
         default_output_dir,
         label_folder_parts,
         label_records as _label_records,
+        load_routine_config,
         main as _main,
         parse_clip_filename,
         read_csv,
@@ -70,6 +54,17 @@ except ImportError:  # pragma: no cover - supports direct script execution
         write_csv,
         write_json_manifest as _write_json_manifest,
     )
+
+
+BADUANJIN_CONFIG = load_routine_config("baduanjin")
+ACTION_LABELS = BADUANJIN_CONFIG.action_labels
+ACTION_RULES = BADUANJIN_CONFIG.action_rules
+INTRO_LABEL = BADUANJIN_CONFIG.intro_label
+OUTRO_LABEL = BADUANJIN_CONFIG.outro_label
+OPENING_LABEL = BADUANJIN_CONFIG.opening_label
+CLOSING_LABEL = BADUANJIN_CONFIG.closing_label
+INTRO_OUTRO_RULES = BADUANJIN_CONFIG.intro_outro_rules
+CLOSING_IRRELEVANT_RULES = BADUANJIN_CONFIG.closing_irrelevant_rules
 
 
 def scan_clips(input_dir: str) -> List[ClipRecord]:
