@@ -12,6 +12,7 @@ from mergeVideo import (
     merge_group,
     output_path_for_directory,
     parse_extensions,
+    run_ffmpeg,
     validate_group_sources,
 )
 
@@ -128,6 +129,23 @@ class TestMergeVideoPlan(unittest.TestCase):
 
 
 class TestMergeVideoEngine(unittest.TestCase):
+    def test_run_ffmpeg_uses_stable_output_decoding(self):
+        command = ["ffmpeg", "-version"]
+        completed = CompletedProcess(command, 0, stdout="ok", stderr="")
+
+        with patch("mergeVideo.subprocess.run", return_value=completed) as run:
+            result = run_ffmpeg(command)
+
+        self.assertIs(result, completed)
+        run.assert_called_once_with(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+
     def test_copy_failure_removes_partial_output_before_transcode_fallback(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir) / "clips"

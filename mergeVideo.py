@@ -129,7 +129,14 @@ def concat_file_line(path: Path) -> str:
 
 def run_ffmpeg(command: Sequence[str]) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(command, capture_output=True, text=True, check=False)
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
     except FileNotFoundError as exc:
         raise MergeError("ffmpeg command not found. Please install ffmpeg first.") from exc
 
