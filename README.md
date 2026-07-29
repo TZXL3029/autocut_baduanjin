@@ -224,6 +224,38 @@ python cleanSrt.py ./videos
 
 `cleanSrt.py` 支持清理非当前目录下的文件或目录，但当前不支持指定单独的输出目录；清理后的文件始终写在输入 `.srt` 所在目录。
 
+### 合并同层视频
+
+如果已经有多个分层存放的视频片段，可以用 `mergeVideo.py` 递归扫描目录，并把每个直接包含视频文件的目录各自合并成一个视频。输出文件会写在视频所在目录内，文件名使用该目录名：
+
+```bash
+python mergeVideo.py ./courses
+```
+
+例如 `./courses/lesson01/` 下有 `1.mp4`、`2.mp4` 和 `10.mp4`，会按自然顺序合并为：
+
+```text
+./courses/lesson01/lesson01.mp4
+```
+
+默认会先用 `ffmpeg concat -c copy` 快速无损合并；如果源视频编码或容器不兼容，会自动回退到转码输出 `.mp4`。已存在输出文件时默认跳过，可以先预览分组和顺序：
+
+```bash
+python mergeVideo.py ./courses --dry-run
+```
+
+需要覆盖已有输出文件时使用：
+
+```bash
+python mergeVideo.py ./courses --force
+```
+
+默认视频扩展名沿用 AutoCut 支持的视频格式；如需临时指定扩展名，可以传入逗号分隔列表：
+
+```bash
+python mergeVideo.py ./courses --extensions .mp4,.mov
+```
+
 
 ### 剪切某个视频
 
