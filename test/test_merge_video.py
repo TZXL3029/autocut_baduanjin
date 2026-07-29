@@ -174,6 +174,48 @@ class TestMergeVideoEngine(unittest.TestCase):
             self.assertIn("copy", calls[0])
             self.assertIn("libx264", calls[1])
 
+    def test_successful_merge_deletes_source_videos_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            folder = Path(tmp_dir) / "clips"
+            folder.mkdir()
+            videos = [folder / "1.mp4", folder / "2.mp4"]
+            for video in videos:
+                video.touch()
+            output = folder / "clips.mp4"
+            group = MergeGroup(directory=folder, videos=videos, output=output)
+
+            def fake_run_ffmpeg(command):
+                output.write_text("merged", encoding="utf-8")
+                return CompletedProcess(command, 0, stderr="")
+
+            with patch("mergeVideo.run_ffmpeg", side_effect=fake_run_ffmpeg):
+                merge_group(group, force=True)
+
+            self.assertTrue(output.exists())
+            self.assertFalse(videos[0].exists())
+            self.assertFalse(videos[1].exists())
+
+    def test_successful_merge_can_keep_source_videos(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            folder = Path(tmp_dir) / "clips"
+            folder.mkdir()
+            videos = [folder / "1.mp4", folder / "2.mp4"]
+            for video in videos:
+                video.touch()
+            output = folder / "clips.mp4"
+            group = MergeGroup(directory=folder, videos=videos, output=output)
+
+            def fake_run_ffmpeg(command):
+                output.write_text("merged", encoding="utf-8")
+                return CompletedProcess(command, 0, stderr="")
+
+            with patch("mergeVideo.run_ffmpeg", side_effect=fake_run_ffmpeg):
+                merge_group(group, force=True, delete_sources=False)
+
+            self.assertTrue(output.exists())
+            self.assertTrue(videos[0].exists())
+            self.assertTrue(videos[1].exists())
+
 
 if __name__ == "__main__":
     unittest.main()

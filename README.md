@@ -238,7 +238,7 @@ python mergeVideo.py ./courses
 ./courses/lesson01/lesson01.mp4
 ```
 
-默认会先用 `ffmpeg concat -c copy` 快速无损合并；如果源视频编码或容器不兼容，会自动回退到转码输出 `.mp4`。已存在输出文件时默认跳过，可以先预览分组和顺序：
+默认会先用 `ffmpeg concat -c copy` 快速无损合并；如果源视频编码或容器不兼容，会自动回退到转码输出 `.mp4`。合并成功后会删除参与合并的原视频；如果合并失败或只是预览，不会删除原视频。已存在输出文件时默认跳过，可以先预览分组和顺序：
 
 ```bash
 python mergeVideo.py ./courses --dry-run
@@ -248,6 +248,12 @@ python mergeVideo.py ./courses --dry-run
 
 ```bash
 python mergeVideo.py ./courses --force
+```
+
+如果希望合并成功后仍保留原视频，使用：
+
+```bash
+python mergeVideo.py ./courses --keep-source
 ```
 
 默认视频扩展名沿用 AutoCut 支持的视频格式；如需临时指定扩展名，可以传入逗号分隔列表：

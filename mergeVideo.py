@@ -151,7 +151,28 @@ def remove_partial_output(output: Path) -> None:
         output.unlink()
 
 
-def merge_group(group: MergeGroup, force: bool = False) -> None:
+def delete_source_videos(group: MergeGroup) -> None:
+    errors = []
+    for video in group.videos:
+        if same_path(video, group.output):
+            raise MergeError(f"Refuse to delete output path as a source: {video}")
+        if not video.exists():
+            continue
+        try:
+            video.unlink()
+        except OSError as exc:
+            errors.append(f"{video}: {exc}")
+
+    if errors:
+        raise MergeError(
+            "Merged output was saved, but some source videos could not be deleted:\n"
+            + "\n".join(errors)
+        )
+
+
+def merge_group(
+    group: MergeGroup, force: bool = False, delete_sources: bool = True
+) -> None:
     validate_group_sources(group)
     if len(group.videos) < 2:
         return
@@ -183,6 +204,8 @@ def merge_group(group: MergeGroup, force: bool = False) -> None:
         ]
         copy_result = run_ffmpeg(copy_command)
         if copy_result.returncode == 0:
+            if delete_sources:
+                delete_source_videos(group)
             return
 
         remove_partial_output(group.output)
@@ -215,12 +238,16 @@ def merge_group(group: MergeGroup, force: bool = False) -> None:
                 f"copy stderr:\n{stderr_tail(copy_result)}\n"
                 f"transcode stderr:\n{stderr_tail(transcode_result)}"
             )
+        if delete_sources:
+            delete_source_videos(group)
     finally:
         if list_path.exists():
             list_path.unlink()
 
 
-def print_plan(plans: Iterable[MergePlan], dry_run: bool = False) -> None:
+def print_plan(
+    plans: Iterable[MergePlan], dry_run: bool = False, delete_sources: bool = True
+) -> None:
     prefix = "DRY-RUN " if dry_run else ""
     for plan in plans:
         group = plan.group
@@ -231,6 +258,8 @@ def print_plan(plans: Iterable[MergePlan], dry_run: bool = False) -> None:
         print(f"{prefix}MERGE {group.directory} -> {group.output}")
         for video in group.videos:
             print(f"  - {video.name}")
+        if delete_sources:
+            print("  delete originals after merge")
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -256,6 +285,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=None,
         help="Comma-separated video extensions to include, such as .mp4,.mov.",
     )
+    parser.add_argument(
+        "--keep-source",
+        action="store_true",
+        help="Keep source videos after a successful merge.",
+    )
     return parser.parse_args(argv)
 
 
@@ -272,7 +306,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"No video files found under {root}")
         return 0
 
-    print_plan(plans, dry_run=args.dry_run)
+    print_plan(plans, dry_run=args.dry_run, delete_sources=not args.keep_source)
     if args.dry_run:
         return 0
 
@@ -281,12 +315,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if plan.action != "merge":
             continue
         try:
-            merge_group(plan.group, force=args.force)
+            merge_group(
+                plan.group,
+                force=args.force,
+                delete_sources=not args.keep_source,
+            )
         except MergeError as exc:
             failed += 1
             print(f"FAILED {plan.group.directory}: {exc}", file=sys.stderr)
         else:
             print(f"SAVED {plan.group.output}")
+            if not args.keep_source:
+                print(f"DELETED {len(plan.group.videos)} source videos")
 
     return 1 if failed else 0
 
