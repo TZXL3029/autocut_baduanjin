@@ -250,6 +250,19 @@ python mergeVideo.py ./courses --dry-run
 python mergeVideo.py ./courses --force
 ```
 
+也可以用 `-o` / `--output-dir` 把合并结果输出到另一个目录。相对路径会按当前工作目录解析，绝对路径会直接使用；输出目录内会保留输入目录下的相对层级，避免不同层级的同名目录互相覆盖：
+
+```bash
+python mergeVideo.py ./courses -o ./merged
+python mergeVideo.py ./courses --output-dir D:/merged
+```
+
+例如 `./courses/section01/lesson01/` 会输出到：
+
+```text
+./merged/section01/lesson01/lesson01.mp4
+```
+
 如果希望合并成功后仍保留原视频，使用：
 
 ```bash

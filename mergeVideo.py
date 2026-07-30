@@ -55,8 +55,19 @@ def is_video_file(path: Path, extensions: Optional[Set[str]] = None) -> bool:
     return utils.is_video(path.name.lower())
 
 
-def output_path_for_directory(directory: Path) -> Path:
-    return directory / f"{directory.name}.mp4"
+def output_path_for_directory(
+    directory: Path, root: Optional[Path] = None, output_root: Optional[Path] = None
+) -> Path:
+    if output_root is None:
+        return directory / f"{directory.name}.mp4"
+
+    if root is None:
+        raise ValueError("root is required when output_root is provided")
+
+    relative_dir = directory.resolve().relative_to(root.resolve())
+    if str(relative_dir) == ".":
+        return output_root / f"{directory.name}.mp4"
+    return output_root / relative_dir / f"{directory.name}.mp4"
 
 
 def same_path(left: Path, right: Path) -> bool:
@@ -66,12 +77,20 @@ def same_path(left: Path, right: Path) -> bool:
 
 
 def discover_video_groups(
-    root: Path, extensions: Optional[Set[str]] = None
+    root: Path,
+    extensions: Optional[Set[str]] = None,
+    output_root: Optional[Path] = None,
 ) -> List[MergeGroup]:
     groups = []
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
         directory = Path(dirpath)
-        output = output_path_for_directory(directory)
+        if output_root is not None:
+            dirnames[:] = [
+                dirname
+                for dirname in dirnames
+                if not same_path(directory / dirname, output_root)
+            ]
+        output = output_path_for_directory(directory, root, output_root)
         videos = [
             directory / filename
             for filename in filenames
@@ -92,10 +111,13 @@ def validate_group_sources(group: MergeGroup) -> None:
 
 
 def build_merge_plan(
-    root: Path, extensions: Optional[Set[str]] = None, force: bool = False
+    root: Path,
+    extensions: Optional[Set[str]] = None,
+    force: bool = False,
+    output_root: Optional[Path] = None,
 ) -> List[MergePlan]:
     plans = []
-    for group in discover_video_groups(root, extensions):
+    for group in discover_video_groups(root, extensions, output_root):
         try:
             validate_group_sources(group)
         except MergeError as exc:
@@ -286,6 +308,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Comma-separated video extensions to include, such as .mp4,.mov.",
     )
     parser.add_argument(
+        "-o",
+        "--output-dir",
+        default=None,
+        help=(
+            "Directory to write merged videos. Relative paths are resolved from "
+            "the current working directory; absolute paths are used as-is."
+        ),
+    )
+    parser.add_argument(
         "--keep-source",
         action="store_true",
         help="Keep source videos after a successful merge.",
@@ -301,7 +332,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     extensions = parse_extensions(args.extensions)
-    plans = build_merge_plan(root, extensions=extensions, force=args.force)
+    output_root = Path(args.output_dir) if args.output_dir else None
+    plans = build_merge_plan(
+        root,
+        extensions=extensions,
+        force=args.force,
+        output_root=output_root,
+    )
     if not plans:
         print(f"No video files found under {root}")
         return 0

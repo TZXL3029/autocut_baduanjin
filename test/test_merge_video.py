@@ -59,6 +59,25 @@ class TestMergeVideoDiscovery(unittest.TestCase):
 
         self.assertEqual(output_path_for_directory(folder), folder / "course01.mp4")
 
+    def test_output_path_uses_output_root_with_relative_group_path(self):
+        root = Path("root")
+        folder = root / "section" / "course01"
+        output_root = Path("merged")
+
+        self.assertEqual(
+            output_path_for_directory(folder, root, output_root),
+            output_root / "section" / "course01" / "course01.mp4",
+        )
+
+    def test_output_path_for_root_group_uses_root_directory_name(self):
+        root = Path("courses")
+        output_root = Path("merged")
+
+        self.assertEqual(
+            output_path_for_directory(root, root, output_root),
+            output_root / "courses.mp4",
+        )
+
     def test_custom_extensions_override_default_video_extensions(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             folder = Path(tmp_dir) / "clips"
@@ -72,6 +91,23 @@ class TestMergeVideoDiscovery(unittest.TestCase):
             )
 
             self.assertEqual([path.name for path in group.videos], ["a.xyz"])
+
+    def test_discovery_skips_output_root_inside_input_root(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            source = root / "source"
+            output_root = root / "merged"
+            source.mkdir()
+            output_root.mkdir()
+            (source / "1.mp4").touch()
+            (source / "2.mp4").touch()
+            (output_root / "old1.mp4").touch()
+            (output_root / "old2.mp4").touch()
+
+            groups = discover_video_groups(root, output_root=output_root)
+
+            self.assertEqual([group.directory.name for group in groups], ["source"])
+            self.assertEqual(groups[0].output, output_root / "source" / "source.mp4")
 
 
 class TestMergeVideoPlan(unittest.TestCase):
@@ -114,6 +150,22 @@ class TestMergeVideoPlan(unittest.TestCase):
                 [path.name for path in plan.group.videos],
                 ["1.mp4", "2.mp4"],
             )
+
+    def test_existing_output_dir_file_is_skipped_without_force(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            folder = root / "clips"
+            output_root = root / "merged"
+            folder.mkdir()
+            (output_root / "clips").mkdir(parents=True)
+            (folder / "1.mp4").touch()
+            (folder / "2.mp4").touch()
+            (output_root / "clips" / "clips.mp4").touch()
+
+            [plan] = build_merge_plan(root, force=False, output_root=output_root)
+
+            self.assertEqual(plan.action, "skip")
+            self.assertIn("output exists", plan.reason)
 
     def test_output_path_in_sources_is_rejected(self):
         folder = Path("clips")
