@@ -136,6 +136,7 @@ log/
 .agents/
 vocal_extractor/.agents/
 /outer_repo.md
+*outer_repo.md
 
 # outputs
 *vocals.md
